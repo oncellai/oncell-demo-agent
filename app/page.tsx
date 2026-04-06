@@ -19,9 +19,10 @@ export default function Home() {
   const [projectId] = useState(() => `demo-${Date.now().toString(36)}`);
   const [editCount, setEditCount] = useState(0);
   const [previewReady, setPreviewReady] = useState(false);
+  const [cellId, setCellId] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const previewUrl = `https://${projectId}.${CELLS_DOMAIN}`;
+  const previewUrl = cellId ? `https://${cellId}.${CELLS_DOMAIN}` : "";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,6 +37,8 @@ export default function Home() {
     setMessages((prev) => [...prev, { role: "user", content: instruction }]);
     setGenerating(true);
 
+    let generated = "";
+
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -43,17 +46,36 @@ export default function Home() {
         body: JSON.stringify({ instruction, projectId }),
       });
 
-      const data = await res.json();
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No stream");
+      const decoder = new TextDecoder();
 
-      if (data.code) {
-        setCode(data.code);
-        setEditCount(data.edits || editCount + 1);
-        setFiles(data.files || []);
-        setPreviewReady(true);
-        setMessages((prev) => [...prev, { role: "assistant", content: "Done. Check the preview." }]);
-      } else if (data.error) {
-        setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${data.error}` }]);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        for (const line of chunk.split("\n")) {
+          if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.cellId && !cellId) setCellId(data.cellId);
+            if (data.text) {
+              generated += data.text;
+              setCode(generated);
+            }
+            if (data.done) {
+              if (data.cellId) setCellId(data.cellId);
+              setEditCount(data.edits || editCount + 1);
+              setFiles(data.files || []);
+              setPreviewReady(true);
+            }
+          } catch {}
+        }
       }
+
+      generated = generated.replace(/^```(?:html?)?\n?/gm, "").replace(/```$/gm, "").trim();
+      setCode(generated);
+      setMessages((prev) => [...prev, { role: "assistant", content: "Done. Check the preview." }]);
     } catch (err: any) {
       setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${err.message}` }]);
     }
