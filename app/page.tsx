@@ -209,9 +209,11 @@ export default function Home() {
               </div>
             )
           ) : tab === "code" ? (
-            <pre className="p-4 overflow-auto h-full text-xs font-mono text-white/60 bg-[#0d0d0d] whitespace-pre-wrap">
-              {code || "No code generated yet"}
-            </pre>
+            <div className="overflow-auto h-full bg-[#0d0d0d]">
+              <pre className="p-4 text-[13px] leading-5 font-mono whitespace-pre">
+                {code ? highlightHTML(code) : <span className="text-white/40">No code generated yet</span>}
+              </pre>
+            </div>
           ) : (
             <div className="p-4 space-y-1">
               {files.length === 0 ? (
@@ -237,4 +239,35 @@ function TabBtn({ label, active, onClick }: { label: string; active: boolean; on
       {label}
     </button>
   );
+}
+
+function highlightHTML(code: string) {
+  const lines = code.split("\n");
+  return lines.map((line, i) => (
+    <div key={i} className="flex">
+      <span className="w-10 text-right pr-4 text-white/20 select-none shrink-0">{i + 1}</span>
+      <span dangerouslySetInnerHTML={{ __html: colorize(line) }} />
+    </div>
+  ));
+}
+
+function colorize(line: string): string {
+  return line
+    // HTML comments
+    .replace(/(&lt;!--.*?--&gt;|<!--.*?-->)/g, '<span style="color:#555">$1</span>')
+    // Tags
+    .replace(/(&lt;\/?)([\w-]+)/g, (_, open, tag) => `${esc(open)}<span style="color:#e85454">${esc(tag)}</span>`)
+    .replace(/<(\/?)([\w-]+)/g, (_, slash, tag) => `&lt;${slash}<span style="color:#e85454">${tag}</span>`)
+    // Attributes
+    .replace(/\s([\w-]+)(=)/g, ' <span style="color:#d4a54a">$1</span>$2')
+    // Strings
+    .replace(/"([^"]*)"/g, '<span style="color:#5cdb7f">"$1"</span>')
+    .replace(/'([^']*)'/g, "<span style='color:#5cdb7f'>'$1'</span>")
+    // CSS/JS keywords
+    .replace(/\b(function|const|let|var|return|if|else|for|class|import|export|from|document|window|addEventListener|querySelector)\b/g,
+      '<span style="color:#c9a0ff">$1</span>');
+}
+
+function esc(s: string): string {
+  return s.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
