@@ -12,7 +12,10 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [code, setCode] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [tab, setTab] = useState<"preview" | "code">("preview");
+  const [tab, setTab] = useState<"preview" | "code" | "files">("preview");
+  const [files, setFiles] = useState<string[]>([]);
+  const [projectId] = useState(() => `project-${Date.now().toString(36)}`);
+  const [editCount, setEditCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,7 +37,7 @@ export default function Home() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction, currentCode: code || undefined }),
+        body: JSON.stringify({ instruction, projectId }),
       });
 
       const reader = res.body?.getReader();
@@ -46,13 +49,21 @@ export default function Home() {
         if (done) break;
         const chunk = decoder.decode(value);
         for (const line of chunk.split("\n")) {
-          if (line.startsWith("data: ") && line !== "data: [DONE]") {
-            try {
-              const { text } = JSON.parse(line.slice(6));
-              generated += text;
+          if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.text) {
+              generated += data.text;
               setCode(generated);
-            } catch {}
-          }
+            }
+            if (data.done && data.meta) {
+              setEditCount(data.meta.edits);
+              setFiles(data.meta.files || []);
+            }
+            if (data.error) {
+              setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${data.error}` }]);
+            }
+          } catch {}
         }
       }
 
@@ -74,18 +85,24 @@ export default function Home() {
     <div className="flex h-screen bg-[#0a0a0a] text-[#e8e4de]">
       {/* Left: Chat */}
       <div className="w-[380px] flex flex-col border-r border-white/[0.06]">
+        {/* Header */}
         <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2">
           <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
             <rect x="4" y="4" width="24" height="24" rx="6" stroke="#d4a54a" strokeWidth="1.5" fill="none" />
             <circle cx="16" cy="16" r="3" fill="#d4a54a" />
           </svg>
           <span className="font-mono text-sm font-semibold">oncell demo</span>
+          {editCount > 0 && (
+            <span className="ml-auto text-xs text-white/20 font-mono">{editCount} edit{editCount !== 1 ? "s" : ""}</span>
+          )}
         </div>
 
+        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 && (
             <div className="text-center mt-16">
-              <p className="text-white/25 text-sm mb-4">Describe what you want to build</p>
+              <p className="text-white/25 text-sm mb-1">Describe what you want to build</p>
+              <p className="text-white/15 text-xs mb-5">Each project gets its own isolated cell with persistent storage, DB, and vector search</p>
               {["A landing page for a SaaS product", "A pricing page with 3 tiers", "A dashboard with charts and stats"].map((s) => (
                 <button
                   key={s}
@@ -106,6 +123,7 @@ export default function Home() {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Input */}
         <form onSubmit={handleSubmit} className="p-3 border-t border-white/[0.06]">
           <div className="flex gap-2">
             <input
@@ -126,30 +144,53 @@ export default function Home() {
         </form>
       </div>
 
-      {/* Right: Preview + Code */}
+      {/* Right: Preview + Code + Files */}
       <div className="flex-1 flex flex-col">
         <div className="flex border-b border-white/[0.06]">
-          <button onClick={() => setTab("preview")} className={`px-4 py-2 text-sm font-mono ${tab === "preview" ? "text-[#d4a54a] border-b border-[#d4a54a]" : "text-white/25"}`}>
-            Preview
-          </button>
-          <button onClick={() => setTab("code")} className={`px-4 py-2 text-sm font-mono ${tab === "code" ? "text-[#d4a54a] border-b border-[#d4a54a]" : "text-white/25"}`}>
-            Code
-          </button>
+          <TabBtn label="Preview" active={tab === "preview"} onClick={() => setTab("preview")} />
+          <TabBtn label="Code" active={tab === "code"} onClick={() => setTab("code")} />
+          <TabBtn label={`Files${files.length ? ` (${files.length})` : ""}`} active={tab === "files"} onClick={() => setTab("files")} />
         </div>
 
-        <div className="flex-1 relative">
+        <div className="flex-1 relative overflow-hidden">
           {tab === "preview" ? (
             code ? (
               <iframe srcDoc={buildPreview(code)} className="w-full h-full border-0 bg-white" sandbox="allow-scripts" />
             ) : (
               <div className="flex items-center justify-center h-full text-white/15 text-sm">Preview will appear here</div>
             )
-          ) : (
+          ) : tab === "code" ? (
             <pre className="p-4 overflow-auto h-full text-xs font-mono text-white/50 bg-[#0d0d0d] whitespace-pre-wrap">{code || "No code generated yet"}</pre>
+          ) : (
+            <div className="p-4 space-y-1">
+              {files.length === 0 ? (
+                <p className="text-white/20 text-sm">No files yet</p>
+              ) : (
+                files.map((f) => (
+                  <div key={f} className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono text-white/40 bg-white/[0.02]">
+                    <span className="text-white/15">&#9702;</span>
+                    {f}
+                  </div>
+                ))
+              )}
+              {files.length > 0 && (
+                <p className="text-white/15 text-xs mt-4 pt-3 border-t border-white/[0.04]">
+                  Files persist in the cell's storage. Reload the page — your code is still there.
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+function TabBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className={`px-4 py-2 text-sm font-mono ${active ? "text-[#d4a54a] border-b border-[#d4a54a]" : "text-white/25"}`}>
+      {label}
+    </button>
   );
 }
 
@@ -172,11 +213,8 @@ ${code
   .replace(/^"use client";?\n?/m, "")
   .replace(/import\s+.*?from\s+["'].*?["'];?\n?/gm, "")
   .replace(/export\s+default\s+function\s+(\w+)/m, "function $1")
-  .replace(/export\s+default\s+(\w+);?\s*$/m, "")
-  .replace(/:\s*React\.\w+(<.*?>)?/g, "")
-}
+  .replace(/export\s+default\s+(\w+);?\s*$/m, "")}
 
-// Find the component (last function declaration)
 const _components = [${
     code.match(/(?:export\s+default\s+)?function\s+(\w+)/g)
       ?.map((m) => m.replace(/export\s+default\s+function\s+/, "").replace(/function\s+/, ""))

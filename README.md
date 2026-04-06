@@ -2,7 +2,33 @@
 
 A coding agent built on [oncell.ai](https://oncell.ai) — generates Next.js apps from natural language instructions.
 
-Type what you want, get a working React component with a live preview.
+Type what you want, get a working React component with a live preview. Every project gets its own isolated cell with persistent storage, database, and vector search.
+
+## How It Uses OnCell
+
+Each project runs in its own **oncell cell** — an isolated compute environment with:
+
+| Primitive | Usage in this agent |
+|-----------|-------------------|
+| **Store** | Persists generated files (`app/page.tsx`, etc.) across sessions |
+| **Database** | Stores conversation history and project metadata |
+| **Vector Search** | Indexes generated code so the agent finds relevant context when editing |
+| **Journal** | Crash recovery — if the agent dies mid-generation, it picks up where it left off |
+
+```
+User: "Build a landing page"
+  → Agent creates cell for this project
+  → LLM generates code (streamed to UI)
+  → Store: writes app/page.tsx
+  → Search: indexes the code
+  → DB: saves conversation + metadata
+
+User: "Add a pricing section"
+  → Search: finds relevant existing code
+  → LLM gets existing code + context as input
+  → Store: updates app/page.tsx
+  → DB: appends to conversation
+```
 
 ## Quick Start
 
@@ -12,14 +38,14 @@ cd oncell-demo-agent
 npm install
 ```
 
-Create `.env.local` with your API key:
+Create `.env.local`:
 
 ```
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
 MODEL=google/gemini-2.5-flash
 ```
 
-Get an API key from [openrouter.ai](https://openrouter.ai). Any OpenAI-compatible provider works — just change the base URL in `app/api/generate/route.ts`.
+Get an API key from [openrouter.ai](https://openrouter.ai).
 
 ```bash
 npm run dev
@@ -27,61 +53,44 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## How It Works
-
-1. You type a natural language instruction ("Build a pricing page with 3 tiers")
-2. The instruction is sent to an LLM via OpenRouter
-3. The LLM streams back a complete React/TypeScript component
-4. A live preview renders the component in an iframe using Babel + Tailwind CDN
-5. Send follow-up messages to iterate on the code
-
 ## Deploy
 
 ### Vercel
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/oncellai/oncell-demo-agent&env=OPENROUTER_API_KEY,MODEL)
 
-1. Click the button above
-2. Add environment variables:
-   - `OPENROUTER_API_KEY` — your OpenRouter API key
-   - `MODEL` — model to use (default: `google/gemini-2.5-flash`)
-3. Deploy
-
 ### Netlify
 
 1. Connect the repo in Netlify dashboard
 2. Build command: `npm run build`
 3. Publish directory: `.next`
-4. Add environment variables: `OPENROUTER_API_KEY`, `MODEL`
+4. Add env vars: `OPENROUTER_API_KEY`, `MODEL`
 
 ### Any Platform
 
-This is a standard Next.js app. Deploy it anywhere that supports Node.js:
-
 ```bash
-npm run build
-npm start
+npm run build && npm start
 ```
 
 Set `OPENROUTER_API_KEY` and `MODEL` as environment variables.
 
 ## Supported Models
 
-Any model available on [OpenRouter](https://openrouter.ai/models) works. Recommended:
+Any [OpenRouter](https://openrouter.ai/models) model works:
 
-| Model | Speed | Quality | Cost |
-|-------|-------|---------|------|
-| `google/gemini-2.5-flash` | Fast | Good | $0.15/M input |
-| `anthropic/claude-sonnet-4` | Medium | Great | $3/M input |
-| `openai/gpt-4o` | Medium | Great | $2.50/M input |
-| `openai/gpt-4o-mini` | Fast | Good | $0.15/M input |
+| Model | Speed | Quality |
+|-------|-------|---------|
+| `google/gemini-2.5-flash` | Fast | Good |
+| `anthropic/claude-sonnet-4` | Medium | Great |
+| `openai/gpt-4o` | Medium | Great |
+| `openai/gpt-4o-mini` | Fast | Good |
 
 ## Stack
 
-- [Next.js 16](https://nextjs.org) — App Router
-- [Tailwind CSS 4](https://tailwindcss.com)
+- [Next.js 16](https://nextjs.org) + TypeScript + Tailwind CSS 4
+- [oncell SDK](https://github.com/oncellai/oncell) — Cell, Store, DB, Search, Journal
 - [OpenAI SDK](https://github.com/openai/openai-node) — OpenRouter-compatible
-- [Babel Standalone](https://babeljs.io/docs/babel-standalone) — in-browser JSX transform for preview
+- Babel Standalone — in-browser JSX transform for live preview
 
 ## License
 
