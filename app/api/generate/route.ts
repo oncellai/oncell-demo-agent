@@ -111,12 +111,14 @@ export async function POST(req: Request) {
       // Clean up
       fullCode = fullCode.replace(/^```(?:html?)?\n?/gm, "").replace(/```$/gm, "").trim();
 
-      // Write to cell + save conversation (fire and forget)
-      oncellRequest(customerId, "write_file", { path: "index.html", content: fullCode }).catch(() => {});
+      // Write to cell — must complete before sending done event
+      const writeRes = await oncellRequest(customerId, "write_file", { path: "index.html", content: fullCode });
+      console.log("write_file result:", JSON.stringify(writeRes));
 
+      // Save conversation
       history.push({ role: "user", content: instruction });
       history.push({ role: "assistant", content: fullCode });
-      oncellRequest(customerId, "db_set", { key: "conversation", value: history }).catch(() => {});
+      await oncellRequest(customerId, "db_set", { key: "conversation", value: history });
 
       // Get files
       const filesRes = await oncellRequest(customerId, "list_files", {}).catch(() => ({ files: [] }));

@@ -25,25 +25,25 @@ export default function Home() {
 
   const previewUrl = cellId ? `https://${cellId}.${CELLS_DOMAIN}` : "";
 
-  // Create cell on mount
+  // Create cell once on mount
+  const cellCreated = useRef(false);
   useEffect(() => {
-    async function createCell() {
-      try {
-        const res = await fetch("/api/create-project", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId }),
-        });
-        const data = await res.json();
+    if (cellCreated.current) return;
+    cellCreated.current = true;
+
+    fetch("/api/create-project", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
         if (data.cellId) {
           setCellId(data.cellId);
           setCellReady(true);
         }
-      } catch (err) {
-        console.error("Failed to create cell:", err);
-      }
-    }
-    createCell();
+      })
+      .catch((err) => console.error("Failed to create cell:", err));
   }, [projectId]);
 
   useEffect(() => {
