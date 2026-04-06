@@ -4,6 +4,78 @@ A coding agent built on [oncell.ai](https://oncell.ai) — generates Next.js app
 
 Type what you want, get a working React component with a live preview. Every project gets its own isolated cell with persistent storage, database, and vector search.
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Your App (this repo)                                       │
+│                                                             │
+│  ┌──────────┐    ┌──────────────┐    ┌───────────────────┐  │
+│  │  Chat UI │───▶│  API Route   │───▶│  LLM (OpenRouter) │  │
+│  │  (React) │◀───│  /api/generate│◀───│  Gemini / Claude  │  │
+│  └──────────┘    └──────┬───────┘    └───────────────────┘  │
+│                         │                                   │
+│                         ▼                                   │
+│              ┌─────────────────────┐                        │
+│              │    oncell Cell      │                        │
+│              │  (per project)      │                        │
+│              │                     │                        │
+│              │  ┌───────────────┐  │                        │
+│              │  │ Store         │  │  Persist generated     │
+│              │  │ app/page.tsx  │  │  files across sessions │
+│              │  └───────────────┘  │                        │
+│              │  ┌───────────────┐  │                        │
+│              │  │ Database      │  │  Conversation history  │
+│              │  │ (SQLite)      │  │  + project metadata    │
+│              │  └───────────────┘  │                        │
+│              │  ┌───────────────┐  │                        │
+│              │  │ Vector Search │  │  Index code for        │
+│              │  │               │  │  context-aware edits   │
+│              │  └───────────────┘  │                        │
+│              │  ┌───────────────┐  │                        │
+│              │  │ Journal       │  │  Crash recovery        │
+│              │  │ (WAL)         │  │  + durable execution   │
+│              │  └───────────────┘  │                        │
+│              └─────────────────────┘                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**You write the agent logic. OnCell handles everything else.**
+
+## What OnCell Takes Care Of
+
+### Isolation
+
+Every end-user gets their own cell — a gVisor-sandboxed environment. Cell A physically cannot see Cell B. No shared filesystems, no shared databases, no shared processes. Your users' data is isolated at the kernel level, not just by application logic.
+
+### Storage & Persistence
+
+Files, databases, and search indexes persist across sessions. When a user comes back tomorrow, their project is exactly where they left it. Data lives on NVMe SSDs co-located with compute — no network round-trips to read a file.
+
+### Security
+
+- **gVisor sandboxing** — each cell runs in its own kernel sandbox
+- **Network isolation** — iptables per cell, egress blocked by default
+- **Encrypted storage** — NVMe encrypted at rest, S3 snapshots encrypted with KMS
+- **No shared infrastructure** — each customer's data is physically separate
+
+### Crash Recovery
+
+If the agent crashes mid-generation, the journal replays to the last checkpoint. LLM tokens already spent are not re-spent. The user sees the agent pick up right where it left off.
+
+### Scaling
+
+You don't manage servers. OnCell:
+- **Creates cells on demand** when users arrive
+- **Pauses idle cells** automatically (200ms wake time)
+- **Snapshots to S3** for durability (survives host failure)
+- **Schedules across hosts** for optimal resource usage
+- **Auto-scales** — add more hosts as users grow
+
+### Billing
+
+Usage-based. You pay for compute time and storage. Cells that are paused cost almost nothing ($0.001/hr). Active cells cost $0.05/hr. No minimum commitment.
+
 ## How It Uses OnCell
 
 Each project runs in its own **oncell cell** — an isolated compute environment with:
@@ -74,7 +146,7 @@ Open [http://localhost:3000](http://localhost:3000).
 npm run build && npm start
 ```
 
-Set `OPENROUTER_API_KEY` and `MODEL` as environment variables.
+Set `OPENROUTER_API_KEY`, `MODEL`, and `ONCELL_API_KEY` as environment variables.
 
 ## Supported Models
 
