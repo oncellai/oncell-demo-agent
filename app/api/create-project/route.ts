@@ -54,18 +54,46 @@ module.exports = {
     ctx.journal.step("llm", "Calling " + MODEL);
     ctx.stream({ status: "calling_llm", model: MODEL });
 
-    // Call LLM (only network call from the cell)
-    const llmRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + OPENROUTER_KEY,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ model: MODEL, messages, temperature: 0.2 }),
+    // Stream LLM via native https module (reliable in Node.js)
+    const https = require("https");
+    let code = await new Promise((resolve, reject) => {
+      let result = "";
+      let buf = "";
+      const payload = JSON.stringify({ model: MODEL, messages, temperature: 0.2, stream: true });
+      const req = https.request({
+        hostname: "openrouter.ai",
+        path: "/api/v1/chat/completions",
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + OPENROUTER_KEY,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+        },
+      }, (res) => {
+        res.on("data", (chunk) => {
+          buf += chunk.toString();
+          const lines = buf.split("\\n");
+          buf = lines.pop() || "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ") || line.trim() === "data: [DONE]") continue;
+            try {
+              const parsed = JSON.parse(line.slice(6));
+              const text = parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content;
+              if (text) {
+                result += text;
+                ctx.stream({ text });
+              }
+            } catch {}
+          }
+        });
+        res.on("end", () => resolve(result));
+        res.on("error", reject);
+      });
+      req.on("error", reject);
+      req.write(payload);
+      req.end();
     });
 
-    const llmData = await llmRes.json();
-    let code = (llmData.choices && llmData.choices[0] && llmData.choices[0].message && llmData.choices[0].message.content) || "";
     code = code.replace(/^\`\`\`(?:html?)?\\n?/gm, "").replace(/\`\`\`$/gm, "").trim();
 
     ctx.stream({ status: "writing", lines: code.split("\\n").length });

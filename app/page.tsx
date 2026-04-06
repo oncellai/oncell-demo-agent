@@ -30,8 +30,7 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function createProject() {
-    setCreatingCell(true);
+  function startNewProject() {
     const id = `demo-${Date.now().toString(36)}`;
     setProjectId(id);
     setMessages([]);
@@ -41,7 +40,13 @@ export default function Home() {
     setPreviewReady(false);
     setCellId("");
     setCellReady(false);
+    setCreatingCell(false);
+    // Cell is NOT created here — it's created lazily on first message
+  }
 
+  async function ensureCell(id: string): Promise<boolean> {
+    if (cellReady && cellId) return true;
+    setCreatingCell(true);
     try {
       const res = await fetch("/api/create-project", {
         method: "POST",
@@ -52,21 +57,37 @@ export default function Home() {
       if (data.cellId) {
         setCellId(data.cellId);
         setCellReady(true);
+        setCreatingCell(false);
+        return true;
       }
     } catch (err) {
       console.error("Failed to create cell:", err);
     }
     setCreatingCell(false);
+    return false;
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim() || generating || !cellReady) return;
+    if (!input.trim() || generating) return;
 
     const instruction = input.trim();
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: instruction }]);
     setGenerating(true);
+
+    // Create cell on first message (lazy — no cell until user actually sends)
+    if (!cellReady) {
+      setMessages((prev) => [...prev, { role: "assistant", content: "Creating environment..." }]);
+      const ok = await ensureCell(projectId);
+      if (!ok) {
+        setMessages((prev) => [...prev, { role: "assistant", content: "Failed to create environment. Try again." }]);
+        setGenerating(false);
+        return;
+      }
+      // Remove the "Creating environment..." message
+      setMessages((prev) => prev.filter((m) => m.content !== "Creating environment..."));
+    }
 
     try {
       const res = await fetch("/api/generate", {
@@ -166,11 +187,11 @@ export default function Home() {
           <p className="text-white/50 text-sm mb-2">AI coding agent powered by oncell.ai</p>
           <p className="text-white/30 text-xs mb-8">Each project gets its own isolated cell with persistent storage, database, and vector search.</p>
           <button
-            onClick={createProject}
-            disabled={creatingCell}
+            onClick={startNewProject}
+            disabled={false}
             className="px-6 py-3 bg-[#d4a54a] text-[#0a0a0a] text-sm font-semibold rounded-lg disabled:opacity-50"
           >
-            {creatingCell ? "Creating cell..." : "New Project"}
+            New Project
           </button>
         </div>
       </div>
@@ -191,8 +212,8 @@ export default function Home() {
             <span className="ml-auto text-xs text-white/50 font-mono">{editCount} edit{editCount !== 1 ? "s" : ""}</span>
           )}
           <button
-            onClick={createProject}
-            disabled={creatingCell}
+            onClick={startNewProject}
+            disabled={false}
             className="ml-auto text-xs text-white/40 hover:text-white/70 border border-white/10 px-2 py-1 rounded"
           >
             + New
@@ -202,11 +223,6 @@ export default function Home() {
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 && (
             <div className="text-center mt-16">
-              {!cellReady ? (
-                <p className="text-[#d4a54a] text-sm animate-pulse mb-4">Creating cell...</p>
-              ) : (
-                <p className="text-green-400/70 text-xs mb-4">Cell ready</p>
-              )}
               <p className="text-white/60 text-sm mb-1">Describe what you want to build</p>
               <p className="text-white/40 text-xs mb-5">This project runs in an isolated oncell cell</p>
               {["A landing page for a SaaS product", "A pricing page with 3 tiers", "A dashboard with charts and stats"].map((s) => (
@@ -246,12 +262,12 @@ export default function Home() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Build a landing page..."
-              disabled={generating || !cellReady}
+              disabled={generating}
               className="flex-1 bg-[#111] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white placeholder-white/40 outline-none focus:border-[#d4a54a]/50"
             />
             <button
               type="submit"
-              disabled={generating || !input.trim() || !cellReady}
+              disabled={generating || !input.trim()}
               className="px-4 py-2 bg-[#d4a54a] text-[#0a0a0a] text-sm font-semibold rounded-lg disabled:opacity-40"
             >
               Send
