@@ -16,43 +16,52 @@ export default function Home() {
   const [generating, setGenerating] = useState(false);
   const [tab, setTab] = useState<"preview" | "code" | "files">("preview");
   const [files, setFiles] = useState<string[]>([]);
-  const [projectId] = useState(() => `demo-${Date.now().toString(36)}`);
+  const [projectId, setProjectId] = useState("");
   const [editCount, setEditCount] = useState(0);
   const [previewReady, setPreviewReady] = useState(false);
   const [cellId, setCellId] = useState("");
   const [cellReady, setCellReady] = useState(false);
+  const [creatingCell, setCreatingCell] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const previewUrl = cellId ? `https://${cellId}.${CELLS_DOMAIN}` : "";
-
-  // Create cell once on mount
-  const cellCreated = useRef(false);
-  useEffect(() => {
-    if (cellCreated.current) return;
-    cellCreated.current = true;
-
-    fetch("/api/create-project", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.cellId) {
-          setCellId(data.cellId);
-          setCellReady(true);
-        }
-      })
-      .catch((err) => console.error("Failed to create cell:", err));
-  }, [projectId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  async function createProject() {
+    setCreatingCell(true);
+    const id = `demo-${Date.now().toString(36)}`;
+    setProjectId(id);
+    setMessages([]);
+    setCode("");
+    setFiles([]);
+    setEditCount(0);
+    setPreviewReady(false);
+    setCellId("");
+    setCellReady(false);
+
+    try {
+      const res = await fetch("/api/create-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: id }),
+      });
+      const data = await res.json();
+      if (data.cellId) {
+        setCellId(data.cellId);
+        setCellReady(true);
+      }
+    } catch (err) {
+      console.error("Failed to create cell:", err);
+    }
+    setCreatingCell(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim() || generating) return;
+    if (!input.trim() || generating || !cellReady) return;
 
     const instruction = input.trim();
     setInput("");
@@ -78,7 +87,7 @@ export default function Home() {
         buffer += decoder.decode(value, { stream: true });
 
         const lines = buffer.split("\n");
-        buffer = lines.pop() || ""; // keep incomplete last line
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
           if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
@@ -88,13 +97,13 @@ export default function Home() {
             if (data.text) {
               codeRef += data.text;
               setCode(codeRef);
-              setTab("code"); // auto-switch to code tab while streaming
+              setTab("code");
             }
             if (data.done) {
               setEditCount(data.edits || editCount + 1);
               setFiles(data.files || []);
               setPreviewReady(true);
-              setTab("preview"); // switch to preview when done
+              setTab("preview");
             }
           } catch {}
         }
@@ -110,6 +119,32 @@ export default function Home() {
     setGenerating(false);
   }
 
+  // No project yet — show landing
+  if (!projectId) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#0a0a0a] text-[#e8e4de]">
+        <div className="text-center max-w-md">
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+              <rect x="4" y="4" width="24" height="24" rx="6" stroke="#d4a54a" strokeWidth="1.5" fill="none" />
+              <circle cx="16" cy="16" r="3" fill="#d4a54a" />
+            </svg>
+            <span className="font-mono text-lg font-semibold">oncell demo</span>
+          </div>
+          <p className="text-white/50 text-sm mb-2">AI coding agent powered by oncell.ai</p>
+          <p className="text-white/30 text-xs mb-8">Each project gets its own isolated cell with persistent storage, database, and vector search.</p>
+          <button
+            onClick={createProject}
+            disabled={creatingCell}
+            className="px-6 py-3 bg-[#d4a54a] text-[#0a0a0a] text-sm font-semibold rounded-lg disabled:opacity-50"
+          >
+            {creatingCell ? "Creating cell..." : "New Project"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-[#0a0a0a] text-[#e8e4de]">
       {/* Left: Chat */}
@@ -123,6 +158,13 @@ export default function Home() {
           {editCount > 0 && (
             <span className="ml-auto text-xs text-white/50 font-mono">{editCount} edit{editCount !== 1 ? "s" : ""}</span>
           )}
+          <button
+            onClick={createProject}
+            disabled={creatingCell}
+            className="ml-auto text-xs text-white/40 hover:text-white/70 border border-white/10 px-2 py-1 rounded"
+          >
+            + New
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -134,7 +176,7 @@ export default function Home() {
                 <p className="text-green-400/70 text-xs mb-4">Cell ready</p>
               )}
               <p className="text-white/60 text-sm mb-1">Describe what you want to build</p>
-              <p className="text-white/40 text-xs mb-5">Each project gets its own isolated cell on oncell.ai</p>
+              <p className="text-white/40 text-xs mb-5">This project runs in an isolated oncell cell</p>
               {["A landing page for a SaaS product", "A pricing page with 3 tiers", "A dashboard with charts and stats"].map((s) => (
                 <button
                   key={s}
@@ -172,7 +214,7 @@ export default function Home() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Build a landing page..."
-              disabled={generating}
+              disabled={generating || !cellReady}
               className="flex-1 bg-[#111] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white placeholder-white/40 outline-none focus:border-[#d4a54a]/50"
             />
             <button
@@ -205,7 +247,7 @@ export default function Home() {
               <iframe src={previewUrl} className="w-full h-full border-0 bg-white" />
             ) : (
               <div className="flex items-center justify-center h-full text-white/40 text-sm">
-                Preview will appear here after first generation
+                {cellReady ? "Preview will appear after first generation" : "Create a project to get started"}
               </div>
             )
           ) : tab === "code" ? (
@@ -253,21 +295,16 @@ function highlightHTML(code: string) {
 
 function colorize(line: string): string {
   return line
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     // HTML comments
-    .replace(/(&lt;!--.*?--&gt;|<!--.*?-->)/g, '<span style="color:#555">$1</span>')
+    .replace(/(<!--.*?-->|&lt;!--.*?--&gt;)/g, '<span style="color:#555">$1</span>')
     // Tags
-    .replace(/(&lt;\/?)([\w-]+)/g, (_, open, tag) => `${esc(open)}<span style="color:#e85454">${esc(tag)}</span>`)
-    .replace(/<(\/?)([\w-]+)/g, (_, slash, tag) => `&lt;${slash}<span style="color:#e85454">${tag}</span>`)
+    .replace(/(&lt;\/?)([\w-]+)/g, '$1<span style="color:#e85454">$2</span>')
     // Attributes
     .replace(/\s([\w-]+)(=)/g, ' <span style="color:#d4a54a">$1</span>$2')
     // Strings
     .replace(/"([^"]*)"/g, '<span style="color:#5cdb7f">"$1"</span>')
-    .replace(/'([^']*)'/g, "<span style='color:#5cdb7f'>'$1'</span>")
-    // CSS/JS keywords
-    .replace(/\b(function|const|let|var|return|if|else|for|class|import|export|from|document|window|addEventListener|querySelector)\b/g,
+    // JS keywords
+    .replace(/\b(function|const|let|var|return|if|else|for|class|document|window|addEventListener)\b/g,
       '<span style="color:#c9a0ff">$1</span>');
-}
-
-function esc(s: string): string {
-  return s.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
