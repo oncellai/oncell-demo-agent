@@ -37,8 +37,6 @@ export default function Home() {
     setMessages((prev) => [...prev, { role: "user", content: instruction }]);
     setGenerating(true);
 
-    let generated = "";
-
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -49,32 +47,39 @@ export default function Home() {
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No stream");
       const decoder = new TextDecoder();
+      let buffer = "";
+      let codeRef = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value);
-        for (const line of chunk.split("\n")) {
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || ""; // keep incomplete last line
+
+        for (const line of lines) {
           if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
           try {
             const data = JSON.parse(line.slice(6));
-            if (data.cellId && !cellId) setCellId(data.cellId);
+            if (data.cellId) setCellId(data.cellId);
             if (data.text) {
-              generated += data.text;
-              setCode(generated);
+              codeRef += data.text;
+              setCode(codeRef);
+              setTab("code"); // auto-switch to code tab while streaming
             }
             if (data.done) {
-              if (data.cellId) setCellId(data.cellId);
               setEditCount(data.edits || editCount + 1);
               setFiles(data.files || []);
               setPreviewReady(true);
+              setTab("preview"); // switch to preview when done
             }
           } catch {}
         }
       }
 
-      generated = generated.replace(/^```(?:html?)?\n?/gm, "").replace(/```$/gm, "").trim();
-      setCode(generated);
+      codeRef = codeRef.replace(/^```(?:html?)?\n?/gm, "").replace(/```$/gm, "").trim();
+      setCode(codeRef);
       setMessages((prev) => [...prev, { role: "assistant", content: "Done. Check the preview." }]);
     } catch (err: any) {
       setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${err.message}` }]);
