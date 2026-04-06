@@ -2,124 +2,85 @@
 
 A coding agent built on [oncell.ai](https://oncell.ai) — generates Next.js apps from natural language instructions.
 
-Type what you want, get a working React component with a live preview. Every project gets its own isolated cell with persistent storage, database, and vector search.
+Type what you want. The agent generates code inside an isolated cell. Live preview at `{cell-id}.cells.oncell.ai`.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Your App (this repo)                                       │
-│                                                             │
-│  ┌──────────┐    ┌──────────────┐    ┌───────────────────┐  │
-│  │  Chat UI │───▶│  API Route   │───▶│  LLM (OpenRouter) │  │
-│  │  (React) │◀───│  /api/generate│◀───│  Gemini / Claude  │  │
-│  └──────────┘    └──────┬───────┘    └───────────────────┘  │
-│                         │                                   │
-│                         ▼                                   │
-│              ┌─────────────────────┐                        │
-│              │    oncell Cell      │                        │
-│              │  (per project)      │                        │
-│              │                     │                        │
-│              │  ┌───────────────┐  │                        │
-│              │  │ Store         │  │  Persist generated     │
-│              │  │ app/page.tsx  │  │  files across sessions │
-│              │  └───────────────┘  │                        │
-│              │  ┌───────────────┐  │                        │
-│              │  │ Database      │  │  Conversation history  │
-│              │  │ (SQLite)      │  │  + project metadata    │
-│              │  └───────────────┘  │                        │
-│              │  ┌───────────────┐  │                        │
-│              │  │ Vector Search │  │  Index code for        │
-│              │  │               │  │  context-aware edits   │
-│              │  └───────────────┘  │                        │
-│              │  ┌───────────────┐  │                        │
-│              │  │ Journal       │  │  Crash recovery        │
-│              │  │ (WAL)         │  │  + durable execution   │
-│              │  └───────────────┘  │                        │
-│              └─────────────────────┘                        │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────┐                ┌──────────────────────────┐
+│  Demo Frontend     │                │  oncell platform         │
+│  (Vercel/Netlify)  │                │                          │
+│                    │   oncell API   │  ┌────────────────────┐  │
+│  Chat UI ─────────────────────────────▶│ Cell (per project) │  │
+│                    │                │  │                    │  │
+│  Preview iframe    │   *.cells.     │  │  agent.ts runs     │  │
+│  ──────────────────│───oncell.ai────│──│  inside gVisor     │  │
+│  {cell-id}.cells.  │                │  │                    │  │
+│  oncell.ai         │                │  │  ┌──────────────┐  │  │
+│                    │                │  │  │ Store (files) │  │  │
+└────────────────────┘                │  │  │ DB (convos)   │  │  │
+                                      │  │  │ Search (code) │  │  │
+                                      │  │  │ Next.js dev   │  │  │
+                                      │  │  └──────────────┘  │  │
+                                      │  └────────────────────┘  │
+                                      └──────────────────────────┘
 ```
 
-**You write the agent logic. OnCell handles everything else.**
+**The frontend is just a client. All compute happens in oncell cells.**
 
-## What OnCell Takes Care Of
+## What OnCell Handles
 
-### Isolation
+| Concern | How |
+|---------|-----|
+| **Isolation** | Each user gets a gVisor-sandboxed cell. Cells can't see each other. |
+| **Storage** | Files persist on NVMe. User comes back tomorrow, code is still there. |
+| **Security** | Kernel-level sandbox, network isolation, encrypted storage. |
+| **Scaling** | Cells created on demand, paused when idle (200ms wake), auto-scheduled across hosts. |
+| **Crash recovery** | Journal replays to last checkpoint. No lost work. |
+| **Preview** | Each cell gets `{cell-id}.cells.oncell.ai` — a live URL serving the Next.js app. |
 
-Every end-user gets their own cell — a gVisor-sandboxed environment. Cell A physically cannot see Cell B. No shared filesystems, no shared databases, no shared processes. Your users' data is isolated at the kernel level, not just by application logic.
-
-### Storage & Persistence
-
-Files, databases, and search indexes persist across sessions. When a user comes back tomorrow, their project is exactly where they left it. Data lives on NVMe SSDs co-located with compute — no network round-trips to read a file.
-
-### Security
-
-- **gVisor sandboxing** — each cell runs in its own kernel sandbox
-- **Network isolation** — iptables per cell, egress blocked by default
-- **Encrypted storage** — NVMe encrypted at rest, S3 snapshots encrypted with KMS
-- **No shared infrastructure** — each customer's data is physically separate
-
-### Crash Recovery
-
-If the agent crashes mid-generation, the journal replays to the last checkpoint. LLM tokens already spent are not re-spent. The user sees the agent pick up right where it left off.
-
-### Scaling
-
-You don't manage servers. OnCell:
-- **Creates cells on demand** when users arrive
-- **Pauses idle cells** automatically (200ms wake time)
-- **Snapshots to S3** for durability (survives host failure)
-- **Schedules across hosts** for optimal resource usage
-- **Auto-scales** — add more hosts as users grow
-
-### Billing
-
-Usage-based. You pay for compute time and storage. Cells that are paused cost almost nothing ($0.001/hr). Active cells cost $0.05/hr. No minimum commitment.
-
-## How It Uses OnCell
-
-Each project runs in its own **oncell cell** — an isolated compute environment with:
-
-| Primitive | Usage in this agent |
-|-----------|-------------------|
-| **Store** | Persists generated files (`app/page.tsx`, etc.) across sessions |
-| **Database** | Stores conversation history and project metadata |
-| **Vector Search** | Indexes generated code so the agent finds relevant context when editing |
-| **Journal** | Crash recovery — if the agent dies mid-generation, it picks up where it left off |
+## Repo Structure
 
 ```
-User: "Build a landing page"
-  → Agent creates cell for this project
-  → LLM generates code (streamed to UI)
-  → Store: writes app/page.tsx
-  → Search: indexes the code
-  → DB: saves conversation + metadata
-
-User: "Add a pricing section"
-  → Search: finds relevant existing code
-  → LLM gets existing code + context as input
-  → Store: updates app/page.tsx
-  → DB: appends to conversation
+oncell-demo-agent/
+├── agent/              ← the oncell agent (published via: oncell publish)
+│   ├── agent.ts        ← coding agent: setup, generate, status
+│   └── package.json
+├── app/                ← demo frontend (deployed to Vercel/Netlify)
+│   ├── page.tsx        ← chat UI + preview iframe
+│   ├── api/generate/   ← proxy to oncell API
+│   └── api/project/    ← proxy to oncell API
+├── .env.local          ← API keys (not committed)
+└── package.json
 ```
 
 ## Quick Start
 
+### 1. Publish the agent to oncell
+
 ```bash
-git clone https://github.com/oncellai/oncell-demo-agent.git
-cd oncell-demo-agent
+cd agent
+npm install
+oncell login
+oncell publish
+```
+
+### 2. Run the frontend
+
+```bash
+cd ..
 npm install
 ```
 
 Create `.env.local`:
 
 ```
-OPENROUTER_API_KEY=sk-or-v1-your-key-here
-MODEL=google/gemini-2.5-flash
+ONCELL_API_URL=https://api.oncell.ai
 ONCELL_API_KEY=oncell_sk_your-key-here
+NEXT_PUBLIC_CELLS_DOMAIN=cells.oncell.ai
 ```
 
-- **OPENROUTER_API_KEY** — get from [openrouter.ai](https://openrouter.ai) (for LLM calls)
-- **ONCELL_API_KEY** — get from [oncell.ai/dashboard/keys](https://oncell.ai/dashboard/keys) (for cell storage, DB, search)
+Get an API key from [oncell.ai/dashboard/keys](https://oncell.ai/dashboard/keys).
 
 ```bash
 npm run dev
@@ -127,18 +88,11 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Deploy
+## Deploy Frontend
 
 ### Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/oncellai/oncell-demo-agent&env=OPENROUTER_API_KEY,MODEL,ONCELL_API_KEY)
-
-### Netlify
-
-1. Connect the repo in Netlify dashboard
-2. Build command: `npm run build`
-3. Publish directory: `.next`
-4. Add env vars: `OPENROUTER_API_KEY`, `MODEL`, `ONCELL_API_KEY`
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/oncellai/oncell-demo-agent&env=ONCELL_API_KEY,ONCELL_API_URL,NEXT_PUBLIC_CELLS_DOMAIN)
 
 ### Any Platform
 
@@ -146,25 +100,19 @@ Open [http://localhost:3000](http://localhost:3000).
 npm run build && npm start
 ```
 
-Set `OPENROUTER_API_KEY`, `MODEL`, and `ONCELL_API_KEY` as environment variables.
+Set `ONCELL_API_KEY`, `ONCELL_API_URL`, and `NEXT_PUBLIC_CELLS_DOMAIN` as env vars.
 
-## Supported Models
+## How It Works
 
-Any [OpenRouter](https://openrouter.ai/models) model works:
-
-| Model | Speed | Quality |
-|-------|-------|---------|
-| `google/gemini-2.5-flash` | Fast | Good |
-| `anthropic/claude-sonnet-4` | Medium | Great |
-| `openai/gpt-4o` | Medium | Great |
-| `openai/gpt-4o-mini` | Fast | Good |
-
-## Stack
-
-- [Next.js 16](https://nextjs.org) + TypeScript + Tailwind CSS 4
-- [oncell SDK](https://github.com/oncellai/oncell) — Cell, Store, DB, Search, Journal
-- [OpenAI SDK](https://github.com/openai/openai-node) — OpenRouter-compatible
-- Babel Standalone — in-browser JSX transform for live preview
+1. User types "Build a pricing page" in the chat
+2. Frontend calls `POST /api/generate` (proxies to oncell API)
+3. oncell creates a cell for this user (if first request) or resumes it
+4. Agent inside the cell:
+   - Calls LLM with instruction + existing code context (vector search)
+   - Writes generated code to cell store (`app/page.tsx`)
+   - Next.js dev server inside the cell picks up the change
+5. Preview loads in iframe at `https://{cell-id}.cells.oncell.ai`
+6. User sends follow-up → agent edits code → preview updates
 
 ## License
 

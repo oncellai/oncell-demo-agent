@@ -1,0 +1,9 @@
+{
+  "name": "oncell-demo-coding-agent",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "oncell": "^0.1.0",
+    "openai": "^4.0.0"
+  }
+}
