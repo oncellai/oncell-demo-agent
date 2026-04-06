@@ -93,7 +93,7 @@ export default function Home() {
           </svg>
           <span className="font-mono text-sm font-semibold">oncell demo</span>
           {editCount > 0 && (
-            <span className="ml-auto text-xs text-white/20 font-mono">{editCount} edit{editCount !== 1 ? "s" : ""}</span>
+            <span className="ml-auto text-xs text-white/50 font-mono">{editCount} edit{editCount !== 1 ? "s" : ""}</span>
           )}
         </div>
 
@@ -101,13 +101,13 @@ export default function Home() {
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 && (
             <div className="text-center mt-16">
-              <p className="text-white/25 text-sm mb-1">Describe what you want to build</p>
-              <p className="text-white/15 text-xs mb-5">Each project gets its own isolated cell with persistent storage, DB, and vector search</p>
+              <p className="text-white/60 text-sm mb-1">Describe what you want to build</p>
+              <p className="text-white/50 text-xs mb-5">Each project gets its own isolated cell with persistent storage, DB, and vector search</p>
               {["A landing page for a SaaS product", "A pricing page with 3 tiers", "A dashboard with charts and stats"].map((s) => (
                 <button
                   key={s}
                   onClick={() => setInput(s)}
-                  className="block w-full text-left text-xs text-white/35 hover:text-white/60 px-3 py-2 mb-2 rounded-lg border border-white/[0.06] hover:border-white/[0.12] transition-colors"
+                  className="block w-full text-left text-xs text-white/60 hover:text-white/60 px-3 py-2 mb-2 rounded-lg border border-white/[0.06] hover:border-white/[0.12] transition-colors"
                 >
                   {s}
                 </button>
@@ -157,24 +157,24 @@ export default function Home() {
             code ? (
               <iframe srcDoc={buildPreview(code)} className="w-full h-full border-0 bg-white" sandbox="allow-scripts" />
             ) : (
-              <div className="flex items-center justify-center h-full text-white/15 text-sm">Preview will appear here</div>
+              <div className="flex items-center justify-center h-full text-white/50 text-sm">Preview will appear here</div>
             )
           ) : tab === "code" ? (
             <pre className="p-4 overflow-auto h-full text-xs font-mono text-white/50 bg-[#0d0d0d] whitespace-pre-wrap">{code || "No code generated yet"}</pre>
           ) : (
             <div className="p-4 space-y-1">
               {files.length === 0 ? (
-                <p className="text-white/20 text-sm">No files yet</p>
+                <p className="text-white/50 text-sm">No files yet</p>
               ) : (
                 files.map((f) => (
-                  <div key={f} className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono text-white/40 bg-white/[0.02]">
-                    <span className="text-white/15">&#9702;</span>
+                  <div key={f} className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono text-white/60 bg-white/[0.02]">
+                    <span className="text-white/50">&#9702;</span>
                     {f}
                   </div>
                 ))
               )}
               {files.length > 0 && (
-                <p className="text-white/15 text-xs mt-4 pt-3 border-t border-white/[0.04]">
+                <p className="text-white/50 text-xs mt-4 pt-3 border-t border-white/[0.04]">
                   Files persist in the cell's storage. Reload the page — your code is still there.
                 </p>
               )}
@@ -188,7 +188,7 @@ export default function Home() {
 
 function TabBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} className={`px-4 py-2 text-sm font-mono ${active ? "text-[#d4a54a] border-b border-[#d4a54a]" : "text-white/25"}`}>
+    <button onClick={onClick} className={`px-4 py-2 text-sm font-mono ${active ? "text-[#d4a54a] border-b border-[#d4a54a]" : "text-white/60"}`}>
       {label}
     </button>
   );

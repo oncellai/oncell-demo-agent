@@ -43,9 +43,11 @@ Create `.env.local`:
 ```
 OPENROUTER_API_KEY=sk-or-v1-your-key-here
 MODEL=google/gemini-2.5-flash
+ONCELL_API_KEY=oncell_sk_your-key-here
 ```
 
-Get an API key from [openrouter.ai](https://openrouter.ai).
+- **OPENROUTER_API_KEY** — get from [openrouter.ai](https://openrouter.ai) (for LLM calls)
+- **ONCELL_API_KEY** — get from [oncell.ai/dashboard/keys](https://oncell.ai/dashboard/keys) (for cell storage, DB, search)
 
 ```bash
 npm run dev
@@ -57,14 +59,14 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/oncellai/oncell-demo-agent&env=OPENROUTER_API_KEY,MODEL)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/oncellai/oncell-demo-agent&env=OPENROUTER_API_KEY,MODEL,ONCELL_API_KEY)
 
 ### Netlify
 
 1. Connect the repo in Netlify dashboard
 2. Build command: `npm run build`
 3. Publish directory: `.next`
-4. Add env vars: `OPENROUTER_API_KEY`, `MODEL`
+4. Add env vars: `OPENROUTER_API_KEY`, `MODEL`, `ONCELL_API_KEY`
 
 ### Any Platform
 
