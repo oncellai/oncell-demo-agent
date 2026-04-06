@@ -102,7 +102,7 @@ export default function Home() {
 
       codeRef = codeRef.replace(/^```(?:html?)?\n?/gm, "").replace(/```$/gm, "").trim();
       setCode(codeRef);
-      setMessages((prev) => [...prev, { role: "assistant", content: "Done. Check the preview." }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: `Wrote index.html (${codeRef.split("\n").length} lines). Preview is live.` }]);
     } catch (err: any) {
       setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${err.message}` }]);
     }
@@ -151,7 +151,18 @@ export default function Home() {
               {m.content}
             </div>
           ))}
-          {generating && <div className="text-sm text-[#d4a54a] animate-pulse">Generating...</div>}
+          {generating && (
+            <div className="rounded-lg overflow-hidden border border-white/[0.06]">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.02] border-b border-white/[0.04]">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#d4a54a] animate-pulse" />
+                <span className="text-xs text-white/40 font-mono">index.html</span>
+                <span className="text-xs text-white/25 ml-auto font-mono">{code.split("\n").length} lines</span>
+              </div>
+              <pre className="p-3 text-[10px] font-mono text-white/40 max-h-[200px] overflow-y-auto bg-[#0d0d0d] whitespace-pre-wrap">
+                {code.slice(-500) || "..."}
+              </pre>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
