@@ -11,14 +11,7 @@ const oncell = new OnCell({
 });
 
 const AGENT_CODE = `
-const SYSTEM_PROMPT = "You are an expert web developer. 
-Generate a COMPLETE, SINGLE HTML page with embedded CSS and JavaScript. 
-Rules: Output ONLY valid HTML — no markdown fences, no explanation. 
-Include <script src=\\"https://cdn.tailwindcss.com\\"></script> in the head. 
-Use Tailwind CSS for all styling. Include any JavaScript inline in <script> tags. 
-Make it visually polished — proper spacing, colors, typography, responsive. 
-The page must be self-contained. When modifying existing code, 
-preserve structure and only change what was requested.";
+const SYSTEM_PROMPT = "You are an expert web developer. Generate a COMPLETE, SINGLE HTML page with embedded CSS and JavaScript. Rules: Output ONLY valid HTML — no markdown fences, no explanation. Include <script src=\\"https://cdn.tailwindcss.com\\"></script> in the head. Use Tailwind CSS for all styling. Include any JavaScript inline in <script> tags. Make it visually polished — proper spacing, colors, typography, responsive. The page must be self-contained. When modifying existing code, preserve structure and only change what was requested.";
 
 module.exports = {
   async generate(ctx, params) {
