@@ -17,14 +17,18 @@ export async function POST(req: Request) {
     return Response.json({ error: "instruction and projectId required" }, { status: 400 });
   }
 
-  // agentRequest returns the raw Response (supports SSE streaming)
-  const res = await oncell.cells.agentRequest(projectId, "generate", { instruction });
+  try {
+    const res = await oncell.cells.agentRequest(projectId, "generate", { instruction });
 
-  return new Response(res.body, {
-    status: res.status,
-    headers: {
-      "Content-Type": res.headers.get("content-type") || "application/json",
-      "Cache-Control": "no-cache",
-    },
-  });
+    return new Response(res.body, {
+      status: res.status,
+      headers: {
+        "Content-Type": res.headers.get("content-type") || "application/json",
+        "Cache-Control": "no-cache",
+      },
+    });
+  } catch (err: any) {
+    console.error("generate error:", err.message);
+    return Response.json({ error: err.message || "Agent request failed" }, { status: 502 });
+  }
 }
