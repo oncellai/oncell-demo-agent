@@ -98,6 +98,8 @@ GET  {cell-id}.cells.oncell.ai        → live preview (served by cell)
 
 No Docker, no infra config, no storage setup. The agent handles file writes, DB, and search locally inside the cell.
 
+> **Note:** This demo uses the **default** cell image (bare Node.js runtime). Agent code is passed inline via the `agent` field. For pre-built environments like Next.js, you can specify `image: "nextjs"` when creating a cell — see the [Cell Images docs](https://oncell.ai/docs#cell-images).
+
 ## Supported Models
 
 Any [OpenRouter](https://openrouter.ai/models) model:
